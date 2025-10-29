@@ -20,7 +20,7 @@ jobs:
           script: |
             const PROJECT_NUMBER = 1; // Número de tu proyecto (lo ves en la URL)
             const OWNER = context.repo.owner; // Owner del repositorio
-            const STATUS_FIELD_NAME = 'Estado'; // Nombre de tu campo de estado
+            const STATUS_FIELD_NAME = 'Status'; // Nombre de tu campo de estado
             const TARGET_STATUS = 'In progress'; // Nombre exacto de tu columna/estado
             
             console.log('Issue asignado:', context.payload.issue.number);
