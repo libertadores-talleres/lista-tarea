@@ -18,11 +18,10 @@ jobs:
         with:
           github-token: ${{ secrets.PROJECT_TOKEN }}
           script: |
-            // Configuración - DEBES CAMBIAR ESTOS VALORES
-            const PROJECT_NUMBER = 1; // Número de tu proyecto (lo ves en la URL)
+            const PROJECT_NUMBER = 1;
             const OWNER = context.repo.owner; // Owner del repositorio
             const STATUS_FIELD_NAME = 'Status'; // Nombre de tu campo de estado
-            const TARGET_STATUS = 'In Progress'; // Nombre exacto de tu columna/estado
+            const TARGET_STATUS = 'In progress'; // Nombre exacto de tu columna/estado
             
             console.log('Issue asignado:', context.payload.issue.number);
             
