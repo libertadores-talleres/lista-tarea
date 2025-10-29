@@ -29,20 +29,6 @@ jobs:
               // 1. Obtener el Project ID
               const projectQuery = `
                 query($owner: String!, $number: Int!, $fieldName: String!) {
-                  user(login: $owner) {
-                    projectV2(number: $number) {
-                      id
-                      field(name: $fieldName) {
-                        ... on ProjectV2SingleSelectField {
-                          id
-                          options {
-                            id
-                            name
-                          }
-                        }
-                      }
-                    }
-                  }
                   organization(login: $owner) {
                     projectV2(number: $number) {
                       id
