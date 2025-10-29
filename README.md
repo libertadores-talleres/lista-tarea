@@ -12,6 +12,7 @@
 
 
 
+
 # 💡 Descripción aplicativo
 
 Este proyecto es una aplicación web sencilla tipo **To-Do List**, desarrollada con **HTML, CSS y JavaScript**.  
