@@ -18,7 +18,7 @@ jobs:
         with:
           github-token: ${{ secrets.PROJECT_TOKEN }}
           script: |
-            const PROJECT_NUMBER = 1;
+            const PROJECT_NUMBER = 1; // Número de tu proyecto (lo ves en la URL)
             const OWNER = context.repo.owner; // Owner del repositorio
             const STATUS_FIELD_NAME = 'Status'; // Nombre de tu campo de estado
             const TARGET_STATUS = 'In progress'; // Nombre exacto de tu columna/estado
@@ -28,11 +28,11 @@ jobs:
             try {
               // 1. Obtener el Project ID
               const projectQuery = `
-                query($owner: String!, $number: Int!) {
+                query($owner: String!, $number: Int!, $fieldName: String!) {
                   user(login: $owner) {
                     projectV2(number: $number) {
                       id
-                      field(name: $STATUS_FIELD_NAME) {
+                      field(name: $fieldName) {
                         ... on ProjectV2SingleSelectField {
                           id
                           options {
@@ -46,7 +46,7 @@ jobs:
                   organization(login: $owner) {
                     projectV2(number: $number) {
                       id
-                      field(name: $STATUS_FIELD_NAME) {
+                      field(name: $fieldName) {
                         ... on ProjectV2SingleSelectField {
                           id
                           options {
@@ -62,7 +62,8 @@ jobs:
               
               const projectData = await github.graphql(projectQuery, {
                 owner: OWNER,
-                number: PROJECT_NUMBER
+                number: PROJECT_NUMBER,
+                fieldName: STATUS_FIELD_NAME
               });
               
               // Determinar si es un proyecto de usuario u organización
