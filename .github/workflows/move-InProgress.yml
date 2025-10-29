@@ -1,0 +1,173 @@
+name: Auto move assigned issues to In Progress
+
+on:
+  issues:
+    types: [assigned]
+
+permissions:
+  issues: write
+  contents: read
+  repository-projects: write
+
+jobs:
+  move-to-in-progress:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Move issue to In Progress
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PROJECT_TOKEN }}
+          script: |
+            // Configuración - DEBES CAMBIAR ESTOS VALORES
+            const PROJECT_NUMBER = 1; // Número de tu proyecto (lo ves en la URL)
+            const OWNER = context.repo.owner; // Owner del repositorio
+            const STATUS_FIELD_NAME = 'Status'; // Nombre de tu campo de estado
+            const TARGET_STATUS = 'In Progress'; // Nombre exacto de tu columna/estado
+            
+            console.log('Issue asignado:', context.payload.issue.number);
+            
+            try {
+              // 1. Obtener el Project ID
+              const projectQuery = `
+                query($owner: String!, $number: Int!) {
+                  user(login: $owner) {
+                    projectV2(number: $number) {
+                      id
+                      field(name: $STATUS_FIELD_NAME) {
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          options {
+                            id
+                            name
+                          }
+                        }
+                      }
+                    }
+                  }
+                  organization(login: $owner) {
+                    projectV2(number: $number) {
+                      id
+                      field(name: $STATUS_FIELD_NAME) {
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          options {
+                            id
+                            name
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+              
+              const projectData = await github.graphql(projectQuery, {
+                owner: OWNER,
+                number: PROJECT_NUMBER
+              });
+              
+              // Determinar si es un proyecto de usuario u organización
+              const project = projectData.user?.projectV2 || projectData.organization?.projectV2;
+              
+              if (!project) {
+                console.log('No se encontró el proyecto');
+                return;
+              }
+              
+              console.log('Project ID:', project.id);
+              
+              // 2. Obtener el ID de la opción "In Progress"
+              const statusField = project.field;
+              const statusOption = statusField.options.find(opt => opt.name === TARGET_STATUS);
+              
+              if (!statusOption) {
+                console.log(`No se encontró el estado "${TARGET_STATUS}"`);
+                console.log('Estados disponibles:', statusField.options.map(o => o.name));
+                return;
+              }
+              
+              console.log('Status Option ID:', statusOption.id);
+              
+              // 3. Obtener el item ID del issue en el proyecto
+              const itemQuery = `
+                query($issueId: ID!) {
+                  node(id: $issueId) {
+                    ... on Issue {
+                      projectItems(first: 10) {
+                        nodes {
+                          id
+                          project {
+                            id
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+              
+              const issueData = await github.graphql(itemQuery, {
+                issueId: context.payload.issue.node_id
+              });
+              
+              const projectItem = issueData.node.projectItems.nodes.find(
+                item => item.project.id === project.id
+              );
+              
+              if (!projectItem) {
+                console.log('El issue no está en el proyecto. Agregándolo...');
+                
+                // Agregar el issue al proyecto
+                const addItemMutation = `
+                  mutation($projectId: ID!, $contentId: ID!) {
+                    addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
+                      item {
+                        id
+                      }
+                    }
+                  }
+                `;
+                
+                const addResult = await github.graphql(addItemMutation, {
+                  projectId: project.id,
+                  contentId: context.payload.issue.node_id
+                });
+                
+                var itemId = addResult.addProjectV2ItemById.item.id;
+                console.log('Issue agregado al proyecto. Item ID:', itemId);
+              } else {
+                var itemId = projectItem.id;
+                console.log('Item ID encontrado:', itemId);
+              }
+              
+              // 4. Actualizar el status del item
+              const updateMutation = `
+                mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                  updateProjectV2ItemFieldValue(
+                    input: {
+                      projectId: $projectId
+                      itemId: $itemId
+                      fieldId: $fieldId
+                      value: { singleSelectOptionId: $optionId }
+                    }
+                  ) {
+                    projectV2Item {
+                      id
+                    }
+                  }
+                }
+              `;
+              
+              await github.graphql(updateMutation, {
+                projectId: project.id,
+                itemId: itemId,
+                fieldId: statusField.id,
+                optionId: statusOption.id
+              });
+              
+              console.log(`✅ Issue #${context.payload.issue.number} movido a "${TARGET_STATUS}"`);
+              
+            } catch (error) {
+              console.error('Error:', error);
+              core.setFailed(error.message);
+            }
