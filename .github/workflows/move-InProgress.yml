@@ -19,14 +19,14 @@ jobs:
           github-token: ${{ secrets.PROJECT_TOKEN }}
           script: |
             const PROJECT_NUMBER = 1; // Número de tu proyecto (lo ves en la URL)
-            const OWNER = context.repo.owner; // Owner del repositorio
+            const OWNER =  "libertadores-talleres"; // Owner del repositorio
             const STATUS_FIELD_NAME = 'Status'; // Nombre de tu campo de estado
             const TARGET_STATUS = 'In progress'; // Nombre exacto de tu columna/estado
             
             console.log('Issue asignado:', context.payload.issue.number);
             
             try {
-              // 1. Obtener el Project ID
+              // 1️⃣ Obtener el Project ID y opciones del campo Status
               const projectQuery = `
                 query($owner: String!, $number: Int!, $fieldName: String!) {
                   organization(login: $owner) {
@@ -35,10 +35,7 @@ jobs:
                       field(name: $fieldName) {
                         ... on ProjectV2SingleSelectField {
                           id
-                          options {
-                            id
-                            name
-                          }
+                          options { id name }
                         }
                       }
                     }
@@ -52,40 +49,33 @@ jobs:
                 fieldName: STATUS_FIELD_NAME
               });
               
-              // Determinar si es un proyecto de usuario u organización
-              const project = projectData.user?.projectV2 || projectData.organization?.projectV2;
-              
+              const project = projectData.organization?.projectV2;
               if (!project) {
-                console.log('No se encontró el proyecto');
+                console.log('❌ No se encontró el proyecto');
                 return;
               }
               
-              console.log('Project ID:', project.id);
+              console.log('✅ Project ID:', project.id);
               
-              // 2. Obtener el ID de la opción "In Progress"
+              // 2️⃣ Buscar la opción "In progress"
               const statusField = project.field;
               const statusOption = statusField.options.find(opt => opt.name === TARGET_STATUS);
               
               if (!statusOption) {
-                console.log(`No se encontró el estado "${TARGET_STATUS}"`);
+                console.log(`❌ No se encontró el estado "${TARGET_STATUS}"`);
                 console.log('Estados disponibles:', statusField.options.map(o => o.name));
                 return;
               }
               
-              console.log('Status Option ID:', statusOption.id);
+              console.log('✅ Status Option ID:', statusOption.id);
               
-              // 3. Obtener el item ID del issue en el proyecto
+              // 3️⃣ Buscar si el issue ya está en el proyecto
               const itemQuery = `
                 query($issueId: ID!) {
                   node(id: $issueId) {
                     ... on Issue {
                       projectItems(first: 10) {
-                        nodes {
-                          id
-                          project {
-                            id
-                          }
-                        }
+                        nodes { id project { id } }
                       }
                     }
                   }
@@ -96,20 +86,18 @@ jobs:
                 issueId: context.payload.issue.node_id
               });
               
-              const projectItem = issueData.node.projectItems.nodes.find(
+              let projectItem = issueData.node.projectItems.nodes.find(
                 item => item.project.id === project.id
               );
               
+              let itemId;
               if (!projectItem) {
-                console.log('El issue no está en el proyecto. Agregándolo...');
+                console.log('⚙️ El issue no está en el proyecto. Agregándolo...');
                 
-                // Agregar el issue al proyecto
                 const addItemMutation = `
                   mutation($projectId: ID!, $contentId: ID!) {
                     addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
-                      item {
-                        id
-                      }
+                      item { id }
                     }
                   }
                 `;
@@ -119,14 +107,14 @@ jobs:
                   contentId: context.payload.issue.node_id
                 });
                 
-                var itemId = addResult.addProjectV2ItemById.item.id;
-                console.log('Issue agregado al proyecto. Item ID:', itemId);
+                itemId = addResult.addProjectV2ItemById.item.id;
+                console.log('✅ Issue agregado al proyecto. Item ID:', itemId);
               } else {
-                var itemId = projectItem.id;
-                console.log('Item ID encontrado:', itemId);
+                itemId = projectItem.id;
+                console.log('✅ Item ID encontrado:', itemId);
               }
               
-              // 4. Actualizar el status del item
+              // 4️⃣ Actualizar el campo Status a "In progress"
               const updateMutation = `
                 mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
                   updateProjectV2ItemFieldValue(
@@ -136,11 +124,7 @@ jobs:
                       fieldId: $fieldId
                       value: { singleSelectOptionId: $optionId }
                     }
-                  ) {
-                    projectV2Item {
-                      id
-                    }
-                  }
+                  ) { projectV2Item { id } }
                 }
               `;
               
@@ -151,9 +135,9 @@ jobs:
                 optionId: statusOption.id
               });
               
-              console.log(`✅ Issue #${context.payload.issue.number} movido a "${TARGET_STATUS}"`);
+              console.log(`🎉 Issue #${context.payload.issue.number} movido a "${TARGET_STATUS}"`);
               
             } catch (error) {
-              console.error('Error:', error);
+              console.error('❌ Error:', error);
               core.setFailed(error.message);
             }
